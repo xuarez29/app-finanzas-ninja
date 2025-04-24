@@ -55,6 +55,13 @@ def convertir_html_a_pdf(html_content, output_path):
         pisa_status = pisa.CreatePDF(src=html_content, dest=result_file)
     return pisa_status.err
 
+# --- Inicializar CSV limpio si no existe ---
+csv_path = "resumen_datos.csv"
+if not os.path.exists(csv_path):
+    columnas = ["nombre", "rfc", "cuenta", "saldo", "tema", "riesgos", "recomendaciones", "fecha"]
+    df_vacio = pd.DataFrame(columns=columnas)
+    df_vacio.to_csv(csv_path, index=False)
+
 # ========== Procesar PDF ==========
 if opcion == "\U0001F4C4 Procesar PDF":
     st.image(logo_path, width=100)
@@ -139,14 +146,10 @@ Texto:
                 for clave, valor in datos_completo.items():
                     st.write(f"**{clave.capitalize()}:** {valor}")
 
-                csv_path = "resumen_datos.csv"
                 df = pd.DataFrame([datos_completo])
-                if os.path.exists(csv_path):
-                    df_existente = pd.read_csv(csv_path)
-                    df_existente = pd.concat([df_existente, df], ignore_index=True)
-                    df_existente.to_csv(csv_path, index=False)
-                else:
-                    df.to_csv(csv_path, index=False)
+                df_existente = pd.read_csv(csv_path)
+                df_existente = pd.concat([df_existente, df], ignore_index=True)
+                df_existente.to_csv(csv_path, index=False)
 
                 with open(csv_path, "rb") as f:
                     st.download_button("\U0001F4C5 Descargar CSV completo", f, file_name="resumen_datos.csv", mime="text/csv")
