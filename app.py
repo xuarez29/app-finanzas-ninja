@@ -1,3 +1,4 @@
+
 import streamlit as st
 st.set_page_config(page_title="Resumen Financiero Inteligente", layout="centered")
 
@@ -13,7 +14,6 @@ import altair as alt
 from datetime import datetime
 import re
 
-# --- Autenticación simple ---
 USUARIOS = {
     "admin": "ninja1929",
     "cliente1": "ninja1929"
@@ -39,20 +39,17 @@ if not st.session_state["autenticado"]:
 else:
     st.sidebar.success(f"Sesión iniciada como: {st.session_state['usuario']}")
 
-# --- Configuración general ---
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 logo_path = "ninjas_logo_md.jpg"
 output_folder = "reportes"
-csv_path = "resumen_datos.csv"
+csv_path = "resumen_finanzas_ninja.csv"
 os.makedirs(output_folder, exist_ok=True)
 
-# Crear CSV vacío si no existe
 if not os.path.exists(csv_path):
     columnas = ["nombre", "rfc", "cuenta", "saldo", "tema", "riesgos", "recomendaciones", "fecha"]
     pd.DataFrame(columns=columnas).to_csv(csv_path, index=False)
 
-# --- Vista seleccionada ---
 opcion = st.sidebar.radio("Navegación:", ["📄 Procesar PDF", "📊 Dashboard Analítico"])
 
 if opcion == "📄 Procesar PDF":
@@ -66,6 +63,7 @@ if opcion == "📄 Procesar PDF":
 
         st.subheader("📃 Texto extraído")
         st.text_area("Contenido del PDF", text, height=300)
+
         if st.button("🔍 Extraer datos clave y analizar"):
             with st.spinner("Analizando con IA..."):
                 prompt = f"""
@@ -92,8 +90,6 @@ Texto:
                     temperature=0.3
                 )
                 content = response.choices[0].message.content
-
-                # Limpieza de formato markdown
                 content_clean = content.strip().strip("`").replace("```json", "").replace("```", "").strip()
 
                 try:
@@ -103,7 +99,6 @@ Texto:
                     st.code(content)
                     st.stop()
 
-                # Validar y normalizar saldo
                 if datos["saldo"] != "No encontrado":
                     try:
                         monto = float(datos["saldo"].replace(",", "").replace("$", ""))
@@ -112,16 +107,14 @@ Texto:
                         datos["saldo"] = "No encontrado"
                 else:
                     texto_normalizado = text.replace("\n", " ").lower()
-                    if "saldo total" in texto_normalizado and "al corte" in texto_normalizado:
-                        match = re.search(r"saldo total.*al corte.*?\$([\d,]+\.\d{2})", texto_normalizado)
-                        if match:
-                            try:
-                                monto = float(match.group(1).replace(",", ""))
-                                datos["saldo"] = format_currency(monto, "MXN", locale="es_MX")
-                            except:
-                                datos["saldo"] = "No encontrado"
+                    match = re.search(r"(saldo.*al corte.*?|saldo.*final.*?)\$?([\d,]+\.\d{2})", texto_normalizado)
+                    if match:
+                        try:
+                            monto = float(match.group(2).replace(",", ""))
+                            datos["saldo"] = format_currency(monto, "MXN", locale="es_MX")
+                        except:
+                            datos["saldo"] = "No encontrado"
 
-                # Construcción del registro
                 fecha_actual = datetime.today().strftime("%Y-%m-%d")
                 datos_completo = {
                     "nombre": datos.get("nombre", "No encontrado"),
@@ -138,20 +131,18 @@ Texto:
                 for clave, valor in datos_completo.items():
                     st.write(f"**{clave.capitalize()}:** {valor}")
 
-                # Guardar en CSV
                 df = pd.DataFrame([datos_completo])
                 df_existente = pd.read_csv(csv_path)
                 df_existente = pd.concat([df_existente, df], ignore_index=True)
                 df_existente.to_csv(csv_path, index=False)
 
                 with open(csv_path, "rb") as f:
-                    st.download_button("📥 Descargar CSV completo", f, file_name="resumen_datos.csv", mime="text/csv")
-                # Generar PDF
+                    st.download_button("📥 Descargar CSV completo", f, file_name="resumen_finanzas_ninja.csv", mime="text/csv")
+
                 tabla = "".join([
                     f"<tr><td><strong>{k.capitalize()}</strong></td><td>{v}</td></tr>"
                     for k, v in datos_completo.items()
                 ])
-
                 html_content = f"""
                 <html>
                 <body>
@@ -164,8 +155,6 @@ Texto:
                 </body>
                 </html>
                 """
-
-                # Generar nombre único del archivo
                 base_filename = f"resumen_{datos_completo['nombre'].replace(' ', '_')}"
                 filename = f"{base_filename}.pdf"
                 count = 1
@@ -174,32 +163,27 @@ Texto:
                     count += 1
                 pdf_path = os.path.join(output_folder, filename)
 
-                # Crear PDF
                 def convertir_html_a_pdf(html_content, output_path):
                     with open(output_path, "w+b") as result_file:
                         pisa_status = pisa.CreatePDF(src=html_content, dest=result_file)
                     return pisa_status.err
 
                 error = convertir_html_a_pdf(html_content, pdf_path)
-
                 if not error:
                     with open(pdf_path, "rb") as pdf_file:
                         st.download_button("📄 Descargar PDF generado", pdf_file, file_name=filename, mime="application/pdf")
                 else:
                     st.error("❌ Error al generar el PDF.")
+
 elif opcion == "📊 Dashboard Analítico":
     st.title("📊 Dashboard Analítico")
-
     if not os.path.exists(csv_path):
         st.warning("Aún no se ha procesado ningún documento.")
         st.stop()
-
     df = pd.read_csv(csv_path)
-
     if df.empty:
         st.info("No hay datos disponibles aún. Procesa al menos un PDF para ver el análisis.")
         st.stop()
-
     st.subheader("📌 Indicadores clave")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("📄 Documentos", len(df))
@@ -212,7 +196,6 @@ elif opcion == "📊 Dashboard Analítico":
         col3.metric("💰 Suma total de saldos", "—")
         col4.metric("💳 Saldo promedio", "—")
 
-    # Documentos por persona (Top 10)
     st.subheader("📈 Documentos procesados por persona (Top 10)")
     top = df["nombre"].value_counts().head(10).reset_index()
     top.columns = ["nombre", "documentos"]
@@ -223,7 +206,6 @@ elif opcion == "📊 Dashboard Analítico":
     ).properties(height=400)
     st.altair_chart(chart, use_container_width=True)
 
-    # Evolución mensual
     if "fecha" in df.columns:
         st.subheader("🗓️ Evolución mensual de documentos")
         try:
@@ -239,12 +221,10 @@ elif opcion == "📊 Dashboard Analítico":
         except:
             st.warning("No se pudo graficar la evolución mensual (verifica formato de fechas).")
 
-    # Buscador
     st.subheader("🔎 Buscar registros")
     query = st.text_input("Buscar por nombre, RFC o cuenta:")
     if query:
         df_filtrado = df[df.apply(lambda row: query.lower() in str(row).lower(), axis=1)]
     else:
         df_filtrado = df
-
     st.dataframe(df_filtrado)
