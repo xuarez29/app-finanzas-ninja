@@ -11,6 +11,7 @@ from babel.numbers import format_currency
 from xhtml2pdf import pisa
 import altair as alt
 from datetime import datetime
+import re
 
 # --- AUTENTICACIÓN SIMPLE ---
 USUARIOS = {
@@ -77,7 +78,7 @@ A partir del siguiente texto de un estado de cuenta en español, realiza lo sigu
 - Nombre completo
 - RFC
 - Número de cuenta
-- Saldo total al corte
+- Saldo total al corte (busca explícitamente esta frase o sus componentes aunque estén separados)
 - Tema general del documento
 
 2. Después de leer y analizar todo el contenido, identifica posibles **riesgos financieros** y sugiere **recomendaciones**.
@@ -107,6 +108,17 @@ Texto:
                         datos["saldo"] = format_currency(monto, "MXN", locale="es_MX")
                     except:
                         datos["saldo"] = "No encontrado"
+                else:
+                    # Búsqueda secundaria con expresión regular
+                    texto_normalizado = text.replace("\n", " ").lower()
+                    if "saldo total" in texto_normalizado and "al corte" in texto_normalizado:
+                        match = re.search(r"saldo total.*al corte.*?\$([\d,]+\.\d{2})", texto_normalizado)
+                        if match:
+                            try:
+                                monto = float(match.group(1).replace(",", ""))
+                                datos["saldo"] = format_currency(monto, "MXN", locale="es_MX")
+                            except:
+                                datos["saldo"] = "No encontrado"
 
                 # Agregar fecha de procesamiento
                 fecha_actual = datetime.today().strftime("%Y-%m-%d")
