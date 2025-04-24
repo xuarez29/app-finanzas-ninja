@@ -10,6 +10,7 @@ import json
 from babel.numbers import format_currency
 from xhtml2pdf import pisa
 import altair as alt
+from datetime import datetime
 
 # --- AUTENTICACIÓN SIMPLE ---
 USUARIOS = {
@@ -18,11 +19,11 @@ USUARIOS = {
 }
 
 def login():
-    st.title("🔐 Acceso")
+    st.title("\U0001F510 Acceso")
     usuario = st.text_input("Usuario")
-    contraseña = st.text_input("Contraseña", type="password")
+    contrasena = st.text_input("Contraseña", type="password")
     if st.button("Iniciar sesión"):
-        if USUARIOS.get(usuario) == contraseña:
+        if USUARIOS.get(usuario) == contrasena:
             st.session_state["autenticado"] = True
             st.session_state["usuario"] = usuario
         else:
@@ -38,7 +39,7 @@ else:
     st.sidebar.success(f"Sesión iniciada como: {st.session_state['usuario']}")
 
 # Selector de vista
-opcion = st.sidebar.radio("Navegación:", ["📤 Procesar PDF", "📊 Dashboard Analítico"])
+opcion = st.sidebar.radio("Navegación:", ["\U0001F4C4 Procesar PDF", "\U0001F4CA Dashboard Analítico"])
 
 # Configuración
 load_dotenv()
@@ -54,20 +55,20 @@ def convertir_html_a_pdf(html_content, output_path):
     return pisa_status.err
 
 # ========== Procesar PDF ==========
-if opcion == "📤 Procesar PDF":
+if opcion == "\U0001F4C4 Procesar PDF":
     st.image(logo_path, width=100)
-    st.title("📤 Procesar Estado de Cuenta")
+    st.title("\U0001F4C4 Procesar Estado de Cuenta")
 
-    uploaded_file = st.file_uploader("📤 Sube tu archivo PDF", type="pdf")
+    uploaded_file = st.file_uploader("\U0001F4C4 Sube tu archivo PDF", type="pdf")
 
     if uploaded_file:
         with pdfplumber.open(uploaded_file) as pdf:
             text = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
-        st.subheader("📚 Texto extraído")
+        st.subheader("\U0001F4DA Texto extraído")
         st.text_area("Contenido del PDF", text, height=300)
 
-        if st.button("🔍 Extraer datos clave y analizar"):
+        if st.button("\U0001F50D Extraer datos clave y analizar"):
             with st.spinner("Analizando con IA..."):
                 prompt = f"""
 A partir del siguiente texto de un estado de cuenta en español, realiza lo siguiente:
@@ -107,6 +108,9 @@ Texto:
                     except:
                         datos["saldo"] = "No encontrado"
 
+                # Agregar fecha de procesamiento
+                datos["fecha"] = datetime.today().strftime("%Y-%m-%d")
+
                 st.success("✅ Datos extraídos por IA:")
                 for clave, valor in datos.items():
                     st.write(f"**{clave.capitalize()}:** {valor}")
@@ -119,7 +123,7 @@ Texto:
                     df.to_csv(csv_path, index=False)
 
                 with open(csv_path, "rb") as f:
-                    st.download_button("📥 Descargar CSV completo", f, file_name="resumen_datos.csv", mime="text/csv")
+                    st.download_button("\U0001F4C5 Descargar CSV completo", f, file_name="resumen_datos.csv", mime="text/csv")
 
                 tabla = "".join([f"<tr><td><strong>{k.capitalize()}</strong></td><td>{v}</td></tr>" for k, v in datos.items() if k not in ["riesgos", "recomendaciones"]])
                 html_content = f"""
@@ -150,13 +154,13 @@ Texto:
                 error = convertir_html_a_pdf(html_content, pdf_path)
                 if not error:
                     with open(pdf_path, "rb") as pdf_file:
-                        st.download_button("📄 Descargar PDF generado", pdf_file, file_name=filename, mime="application/pdf")
+                        st.download_button("\U0001F4C4 Descargar PDF generado", pdf_file, file_name=filename, mime="application/pdf")
                 else:
                     st.error("❌ Error al generar el PDF.")
 
 # ========== Dashboard ==========
-elif opcion == "📊 Dashboard Analítico":
-    st.title("📊 Dashboard Analítico")
+elif opcion == "\U0001F4CA Dashboard Analítico":
+    st.title("\U0001F4CA Dashboard Analítico")
 
     csv_path = "resumen_datos.csv"
     if not os.path.exists(csv_path):
@@ -181,6 +185,18 @@ elif opcion == "📊 Dashboard Analítico":
         tooltip=['nombre', 'documentos']
     ).properties(height=400)
     st.altair_chart(chart, use_container_width=True)
+
+    if "fecha" in df.columns:
+        st.subheader("🗓️ Evolución mensual de documentos")
+        df["fecha"] = pd.to_datetime(df["fecha"])
+        df["mes"] = df["fecha"].dt.to_period("M").astype(str)
+        evolucion = df.groupby("mes").size().reset_index(name="documentos")
+        chart_fecha = alt.Chart(evolucion).mark_line(point=True).encode(
+            x="mes:T",
+            y="documentos:Q",
+            tooltip=["mes", "documentos"]
+        ).properties(height=400)
+        st.altair_chart(chart_fecha, use_container_width=True)
 
     st.subheader("🔎 Buscar registros")
     filtro = st.text_input("Buscar por nombre, RFC o cuenta:")
