@@ -13,14 +13,14 @@ import altair as alt
 from datetime import datetime
 import re
 
-# --- AUTENTICACIÓN SIMPLE ---
+# --- Autenticación simple ---
 USUARIOS = {
     "admin": "ninja1929",
     "cliente1": "ninja1929"
 }
 
 def login():
-    st.title("\U0001F510 Acceso")
+    st.title("🔐 Acceso")
     usuario = st.text_input("Usuario")
     contrasena = st.text_input("Contraseña", type="password")
     if st.button("Iniciar sesión"):
@@ -39,44 +39,34 @@ if not st.session_state["autenticado"]:
 else:
     st.sidebar.success(f"Sesión iniciada como: {st.session_state['usuario']}")
 
-# Selector de vista
-opcion = st.sidebar.radio("Navegación:", ["\U0001F4C4 Procesar PDF", "\U0001F4CA Dashboard Analítico"])
-
-# Configuración
+# --- Configuración general ---
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 logo_path = "ninjas_logo_md.jpg"
 output_folder = "reportes"
+csv_path = "resumen_datos.csv"
 os.makedirs(output_folder, exist_ok=True)
 
-# Función para convertir HTML a PDF
-def convertir_html_a_pdf(html_content, output_path):
-    with open(output_path, "w+b") as result_file:
-        pisa_status = pisa.CreatePDF(src=html_content, dest=result_file)
-    return pisa_status.err
-
-# --- Inicializar CSV limpio si no existe ---
-csv_path = "resumen_datos.csv"
+# Crear CSV vacío si no existe
 if not os.path.exists(csv_path):
     columnas = ["nombre", "rfc", "cuenta", "saldo", "tema", "riesgos", "recomendaciones", "fecha"]
-    df_vacio = pd.DataFrame(columns=columnas)
-    df_vacio.to_csv(csv_path, index=False)
+    pd.DataFrame(columns=columnas).to_csv(csv_path, index=False)
 
-# ========== Procesar PDF ==========
-if opcion == "\U0001F4C4 Procesar PDF":
+# --- Vista seleccionada ---
+opcion = st.sidebar.radio("Navegación:", ["📄 Procesar PDF", "📊 Dashboard Analítico"])
+
+if opcion == "📄 Procesar PDF":
     st.image(logo_path, width=100)
-    st.title("\U0001F4C4 Procesar Estado de Cuenta")
-
-    uploaded_file = st.file_uploader("\U0001F4C4 Sube tu archivo PDF", type="pdf")
+    st.title("📄 Procesar Estado de Cuenta")
+    uploaded_file = st.file_uploader("📤 Sube tu archivo PDF", type="pdf")
 
     if uploaded_file:
         with pdfplumber.open(uploaded_file) as pdf:
             text = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
-        st.subheader("\U0001F4DA Texto extraído")
+        st.subheader("📃 Texto extraído")
         st.text_area("Contenido del PDF", text, height=300)
-
-        if st.button("\U0001F50D Extraer datos clave y analizar"):
+        if st.button("🔍 Extraer datos clave y analizar"):
             with st.spinner("Analizando con IA..."):
                 prompt = f"""
 A partir del siguiente texto de un estado de cuenta en español, realiza lo siguiente:
@@ -103,8 +93,8 @@ Texto:
                 )
                 content = response.choices[0].message.content
 
-                # Limpieza para evitar errores con markdown JSON
-                content_clean = content.strip().strip('`').replace("```json", "").replace("```", "").strip()
+                # Limpieza de formato markdown
+                content_clean = content.strip().strip("`").replace("```json", "").replace("```", "").strip()
 
                 try:
                     datos = json.loads(content_clean)
@@ -113,6 +103,7 @@ Texto:
                     st.code(content)
                     st.stop()
 
+                # Validar y normalizar saldo
                 if datos["saldo"] != "No encontrado":
                     try:
                         monto = float(datos["saldo"].replace(",", "").replace("$", ""))
@@ -130,6 +121,7 @@ Texto:
                             except:
                                 datos["saldo"] = "No encontrado"
 
+                # Construcción del registro
                 fecha_actual = datetime.today().strftime("%Y-%m-%d")
                 datos_completo = {
                     "nombre": datos.get("nombre", "No encontrado"),
@@ -146,15 +138,20 @@ Texto:
                 for clave, valor in datos_completo.items():
                     st.write(f"**{clave.capitalize()}:** {valor}")
 
+                # Guardar en CSV
                 df = pd.DataFrame([datos_completo])
                 df_existente = pd.read_csv(csv_path)
                 df_existente = pd.concat([df_existente, df], ignore_index=True)
                 df_existente.to_csv(csv_path, index=False)
 
                 with open(csv_path, "rb") as f:
-                    st.download_button("\U0001F4C5 Descargar CSV completo", f, file_name="resumen_datos.csv", mime="text/csv")
+                    st.download_button("📥 Descargar CSV completo", f, file_name="resumen_datos.csv", mime="text/csv")
+                # Generar PDF
+                tabla = "".join([
+                    f"<tr><td><strong>{k.capitalize()}</strong></td><td>{v}</td></tr>"
+                    for k, v in datos_completo.items()
+                ])
 
-                tabla = "".join([f"<tr><td><strong>{k.capitalize()}</strong></td><td>{v}</td></tr>" for k, v in datos_completo.items()])
                 html_content = f"""
                 <html>
                 <body>
@@ -168,6 +165,7 @@ Texto:
                 </html>
                 """
 
+                # Generar nombre único del archivo
                 base_filename = f"resumen_{datos_completo['nombre'].replace(' ', '_')}"
                 filename = f"{base_filename}.pdf"
                 count = 1
@@ -176,9 +174,77 @@ Texto:
                     count += 1
                 pdf_path = os.path.join(output_folder, filename)
 
+                # Crear PDF
+                def convertir_html_a_pdf(html_content, output_path):
+                    with open(output_path, "w+b") as result_file:
+                        pisa_status = pisa.CreatePDF(src=html_content, dest=result_file)
+                    return pisa_status.err
+
                 error = convertir_html_a_pdf(html_content, pdf_path)
+
                 if not error:
                     with open(pdf_path, "rb") as pdf_file:
-                        st.download_button("\U0001F4C4 Descargar PDF generado", pdf_file, file_name=filename, mime="application/pdf")
+                        st.download_button("📄 Descargar PDF generado", pdf_file, file_name=filename, mime="application/pdf")
                 else:
                     st.error("❌ Error al generar el PDF.")
+elif opcion == "📊 Dashboard Analítico":
+    st.title("📊 Dashboard Analítico")
+
+    if not os.path.exists(csv_path):
+        st.warning("Aún no se ha procesado ningún documento.")
+        st.stop()
+
+    df = pd.read_csv(csv_path)
+
+    if df.empty:
+        st.info("No hay datos disponibles aún. Procesa al menos un PDF para ver el análisis.")
+        st.stop()
+
+    st.subheader("📌 Indicadores clave")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("📄 Documentos", len(df))
+    col2.metric("👤 Personas únicas", df["nombre"].nunique())
+    try:
+        df["saldo_num"] = df["saldo"].replace("[\$,MXN]", "", regex=True).str.replace(",", "").astype(float)
+        col3.metric("💰 Suma total de saldos", f"${df['saldo_num'].sum():,.2f}")
+        col4.metric("💳 Saldo promedio", f"${df['saldo_num'].mean():,.2f}")
+    except:
+        col3.metric("💰 Suma total de saldos", "—")
+        col4.metric("💳 Saldo promedio", "—")
+
+    # Documentos por persona (Top 10)
+    st.subheader("📈 Documentos procesados por persona (Top 10)")
+    top = df["nombre"].value_counts().head(10).reset_index()
+    top.columns = ["nombre", "documentos"]
+    chart = alt.Chart(top).mark_bar().encode(
+        x="documentos:Q",
+        y=alt.Y("nombre:N", sort="-x"),
+        tooltip=["nombre", "documentos"]
+    ).properties(height=400)
+    st.altair_chart(chart, use_container_width=True)
+
+    # Evolución mensual
+    if "fecha" in df.columns:
+        st.subheader("🗓️ Evolución mensual de documentos")
+        try:
+            df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
+            df["mes"] = df["fecha"].dt.to_period("M").astype(str)
+            evol = df.groupby("mes").size().reset_index(name="documentos")
+            chart2 = alt.Chart(evol).mark_line(point=True).encode(
+                x="mes:T",
+                y="documentos:Q",
+                tooltip=["mes", "documentos"]
+            ).properties(height=400)
+            st.altair_chart(chart2, use_container_width=True)
+        except:
+            st.warning("No se pudo graficar la evolución mensual (verifica formato de fechas).")
+
+    # Buscador
+    st.subheader("🔎 Buscar registros")
+    query = st.text_input("Buscar por nombre, RFC o cuenta:")
+    if query:
+        df_filtrado = df[df.apply(lambda row: query.lower() in str(row).lower(), axis=1)]
+    else:
+        df_filtrado = df
+
+    st.dataframe(df_filtrado)
