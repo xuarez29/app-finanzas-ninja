@@ -109,14 +109,24 @@ Texto:
                         datos["saldo"] = "No encontrado"
 
                 # Agregar fecha de procesamiento
-                datos["fecha"] = datetime.today().strftime("%Y-%m-%d")
+                fecha_actual = datetime.today().strftime("%Y-%m-%d")
+                datos_completo = {
+                    "nombre": datos.get("nombre", "No encontrado"),
+                    "rfc": datos.get("rfc", "No encontrado"),
+                    "cuenta": datos.get("cuenta", "No encontrado"),
+                    "saldo": datos.get("saldo", "No encontrado"),
+                    "tema": datos.get("tema", "No encontrado"),
+                    "riesgos": datos.get("riesgos", "No encontrado"),
+                    "recomendaciones": datos.get("recomendaciones", "No encontrado"),
+                    "fecha": fecha_actual
+                }
 
                 st.success("✅ Datos extraídos por IA:")
-                for clave, valor in datos.items():
+                for clave, valor in datos_completo.items():
                     st.write(f"**{clave.capitalize()}:** {valor}")
 
                 csv_path = "resumen_datos.csv"
-                df = pd.DataFrame([datos])
+                df = pd.DataFrame([datos_completo])
                 if os.path.exists(csv_path):
                     df.to_csv(csv_path, mode='a', header=False, index=False)
                 else:
@@ -125,7 +135,7 @@ Texto:
                 with open(csv_path, "rb") as f:
                     st.download_button("\U0001F4C5 Descargar CSV completo", f, file_name="resumen_datos.csv", mime="text/csv")
 
-                tabla = "".join([f"<tr><td><strong>{k.capitalize()}</strong></td><td>{v}</td></tr>" for k, v in datos.items() if k not in ["riesgos", "recomendaciones"]])
+                tabla = "".join([f"<tr><td><strong>{k.capitalize()}</strong></td><td>{v}</td></tr>" for k, v in datos_completo.items() if k not in ["riesgos", "recomendaciones"]])
                 html_content = f"""
                 <html>
                 <body>
@@ -136,14 +146,14 @@ Texto:
                         {tabla}
                     </table>
                     <br><h3>Riesgos detectados:</h3>
-                    <p>{datos['riesgos']}</p>
+                    <p>{datos_completo['riesgos']}</p>
                     <br><h3>Recomendaciones:</h3>
-                    <p>{datos['recomendaciones']}</p>
+                    <p>{datos_completo['recomendaciones']}</p>
                 </body>
                 </html>
                 """
 
-                base_filename = f"resumen_{datos['nombre'].replace(' ', '_')}"
+                base_filename = f"resumen_{datos_completo['nombre'].replace(' ', '_')}"
                 filename = f"{base_filename}.pdf"
                 count = 1
                 while os.path.exists(os.path.join(output_folder, filename)):
