@@ -95,8 +95,12 @@ Texto:
                     temperature=0.3
                 )
                 content = response.choices[0].message.content
+
+                # Limpieza para evitar errores con markdown JSON
+                content_clean = content.strip().strip('`').replace("```json", "").replace("```", "").strip()
+
                 try:
-                    datos = json.loads(content)
+                    datos = json.loads(content_clean)
                 except:
                     st.error("⚠️ Error al interpretar la respuesta como JSON.")
                     st.code(content)
@@ -175,4 +179,3 @@ Texto:
                         st.download_button("\U0001F4C4 Descargar PDF generado", pdf_file, file_name=filename, mime="application/pdf")
                 else:
                     st.error("❌ Error al generar el PDF.")
-                    
