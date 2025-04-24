@@ -109,7 +109,6 @@ Texto:
                     except:
                         datos["saldo"] = "No encontrado"
                 else:
-                    # Búsqueda secundaria con expresión regular
                     texto_normalizado = text.replace("\n", " ").lower()
                     if "saldo total" in texto_normalizado and "al corte" in texto_normalizado:
                         match = re.search(r"saldo total.*al corte.*?\$([\d,]+\.\d{2})", texto_normalizado)
@@ -120,7 +119,6 @@ Texto:
                             except:
                                 datos["saldo"] = "No encontrado"
 
-                # Agregar fecha de procesamiento
                 fecha_actual = datetime.today().strftime("%Y-%m-%d")
                 datos_completo = {
                     "nombre": datos.get("nombre", "No encontrado"),
@@ -140,14 +138,16 @@ Texto:
                 csv_path = "resumen_datos.csv"
                 df = pd.DataFrame([datos_completo])
                 if os.path.exists(csv_path):
-                    df.to_csv(csv_path, mode='a', header=False, index=False)
+                    df_existente = pd.read_csv(csv_path)
+                    df_existente = pd.concat([df_existente, df], ignore_index=True)
+                    df_existente.to_csv(csv_path, index=False)
                 else:
                     df.to_csv(csv_path, index=False)
 
                 with open(csv_path, "rb") as f:
                     st.download_button("\U0001F4C5 Descargar CSV completo", f, file_name="resumen_datos.csv", mime="text/csv")
 
-                tabla = "".join([f"<tr><td><strong>{k.capitalize()}</strong></td><td>{v}</td></tr>" for k, v in datos_completo.items() if k not in ["riesgos", "recomendaciones"]])
+                tabla = "".join([f"<tr><td><strong>{k.capitalize()}</strong></td><td>{v}</td></tr>" for k, v in datos_completo.items()])
                 html_content = f"""
                 <html>
                 <body>
@@ -157,10 +157,6 @@ Texto:
                     <table border="1" cellpadding="6" cellspacing="0">
                         {tabla}
                     </table>
-                    <br><h3>Riesgos detectados:</h3>
-                    <p>{datos_completo['riesgos']}</p>
-                    <br><h3>Recomendaciones:</h3>
-                    <p>{datos_completo['recomendaciones']}</p>
                 </body>
                 </html>
                 """
@@ -179,52 +175,4 @@ Texto:
                         st.download_button("\U0001F4C4 Descargar PDF generado", pdf_file, file_name=filename, mime="application/pdf")
                 else:
                     st.error("❌ Error al generar el PDF.")
-
-# ========== Dashboard ==========
-elif opcion == "\U0001F4CA Dashboard Analítico":
-    st.title("\U0001F4CA Dashboard Analítico")
-
-    csv_path = "resumen_datos.csv"
-    if not os.path.exists(csv_path):
-        st.warning("No se ha generado ningún dato todavía.")
-        st.stop()
-
-    df = pd.read_csv(csv_path)
-
-    st.subheader("📌 Indicadores clave")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("📄 Documentos", len(df))
-    col2.metric("👤 Personas únicas", df["nombre"].nunique())
-    col3.metric("💰 Suma total de saldos", df["saldo"].sum() if df["saldo"].dtype != object else "—")
-    col4.metric("💳 Saldo promedio", df["saldo"].mean() if df["saldo"].dtype != object else "—")
-
-    st.subheader("📈 Documentos procesados por persona (Top 10)")
-    conteo = df["nombre"].value_counts().head(10).reset_index()
-    conteo.columns = ["nombre", "documentos"]
-    chart = alt.Chart(conteo).mark_bar().encode(
-        x='documentos:Q',
-        y=alt.Y('nombre:N', sort='-x'),
-        tooltip=['nombre', 'documentos']
-    ).properties(height=400)
-    st.altair_chart(chart, use_container_width=True)
-
-    if "fecha" in df.columns:
-        st.subheader("🗓️ Evolución mensual de documentos")
-        df["fecha"] = pd.to_datetime(df["fecha"])
-        df["mes"] = df["fecha"].dt.to_period("M").astype(str)
-        evolucion = df.groupby("mes").size().reset_index(name="documentos")
-        chart_fecha = alt.Chart(evolucion).mark_line(point=True).encode(
-            x="mes:T",
-            y="documentos:Q",
-            tooltip=["mes", "documentos"]
-        ).properties(height=400)
-        st.altair_chart(chart_fecha, use_container_width=True)
-
-    st.subheader("🔎 Buscar registros")
-    filtro = st.text_input("Buscar por nombre, RFC o cuenta:")
-    if filtro:
-        df_filtrado = df[df.apply(lambda row: filtro.lower() in str(row).lower(), axis=1)]
-    else:
-        df_filtrado = df
-
-    st.dataframe(df_filtrado)
+                    
